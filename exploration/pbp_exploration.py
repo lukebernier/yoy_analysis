@@ -18,8 +18,6 @@ completed_passes = Counter(passing_yards['complete_pass'])
 yg_counts = Counter(passing_yards['yards_gained'])
 
 #print(completed_passes)
-#print(play_types)
-#print(yg_counts)
 print(passing_yards.iloc[1000])
 
 #passer_df = passing_yards.groupby('passer_player_name', as_index=False).sum()
