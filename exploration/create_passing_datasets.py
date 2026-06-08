@@ -5,14 +5,12 @@ pd.set_option('display.max_columns', None)
 
 def main():
     #save paths to datasets
-    datasets = ['data/play_by_play_2022.csv.gz', 'data/play_by_play_2023.csv.gz', 'data/play_by_play_2024.csv.gz'
+    datasets = ['data/play_by_play_2022.csv.gz', 'data/play_by_play_2023.csv.gz', 'data/play_by_play_2024.csv.gz',
                 'data/play_by_play_2025.csv.gz']
-
-    #TODO delete when done testing
-    datasets = ['data/play_by_play_2025.csv.gz'] 
+    years = ['2022', '2023', '2024', '2025']
 
     #iterate through all pbp datasets to create season level summary datasets for individual player statistics
-    for dataset in datasets:
+    for dataset, year in zip(datasets, years):
 
         #read dataset
         df = pd.read_csv(dataset)
@@ -38,13 +36,13 @@ def main():
         passer_df = relevant_stats.groupby('passer_player_name', as_index=False).agg(
             player_id=('passer_player_id', 'first'),
             total_passing_yards=('passing_yards', 'sum'),
-            average_passing_yards=('passing_yards', 'mean'),
+            pass_yds_per_attempt=('passing_yards', 'mean'),
             pass_attempts=('pass_attempt', 'sum'),
-            passing_touchdowns=('pass_touchdown', 'sum'),
+            passing_tds=('pass_touchdown', 'sum'),
             first_down_passes=('first_down_pass', 'sum'),
-            completions=('complete_pass', 'sum'),
-            interceptions=('interception', 'sum'),
-            comp_percentage=('complete_pass', 'mean'),
+            cmp=('complete_pass', 'sum'),
+            ints=('interception', 'sum'),
+            cmp_percentage=('complete_pass', 'mean'),
             epa=('epa', 'mean'),
             yac_sum=('yards_after_catch', 'sum'),
             yac_avg=('yards_after_catch', 'mean'),
@@ -57,6 +55,9 @@ def main():
             fumbles=('fumble_lost', 'sum'),
             fumbles_to_turnovers=('qb_fumble_to_turnover', 'sum')
         )
+
+        passer_df['td_rate'] = passer_df['passing_tds']/passer_df['pass_attempts']
+        passer_df['int_rate'] = passer_df['ints']/passer_df['pass_attempts']
 
         rusher_df = relevant_stats.groupby('rusher_player_name', as_index=False).agg(
             player_id=('rusher_id', 'first'),
@@ -73,8 +74,10 @@ def main():
 
         #calculate passing fantasy points
         merged['fpts'] = calculate_fpts(merged)
-        
 
+        #save dataset
+        dataset_name = 'data/qb_' + year + '.csv'
+        merged.to_csv(dataset_name)
 
 
 
@@ -87,12 +90,9 @@ def calculate_two_pt_conv(df):
     return(df)
 
 def calculate_fpts(df):
-    fpts = ((df['total_passing_yards'] / 25) + (df['passing_touchdowns'] * 4) - 
-    (df['interceptions'] * 2) - (df['sacks'] * 1) + (df['two_pt_sum'] * 2))
 
-    #remove sacks from equation
-    fpts = ((df['total_passing_yards'] / 25) + (df['passing_touchdowns'] * 4) - 
-    (df['interceptions'] * 2) + (df['two_pt_sum'] * 2) - (df['fumbles_to_turnovers'] * 2) + 
+    fpts = ((df['total_passing_yards'] / 25) + (df['passing_tds'] * 4) - 
+    (df['ints'] * 2) + (df['two_pt_sum'] * 2) - (df['fumbles_to_turnovers'] * 2) + 
     (df['rushing_yds_sum'] / 10) + (df['rushing_tds'] * 6))
 
     return(fpts)
