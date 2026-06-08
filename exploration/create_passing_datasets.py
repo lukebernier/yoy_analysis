@@ -17,26 +17,31 @@ def main():
         #read dataset
         df = pd.read_csv(dataset)
 
-        #calcualte number of two point conversions when passing for fpts calculation
-        df = calculate_two_pt_passes(df)
+        #calculate number of two point conversions when passing for fpts calculation
+        df = calculate_two_pt_conv(df)
 
         #filter on regular season games
         df = df.query("season_type == 'REG'")
 
         #create dataframe with relevant stats
-        passing = df[['yards_gained', 'passer_player_name', 'complete_pass', 'passer_player_id', 
+        relevant_stats = df[['yards_gained', 'passer_player_name', 'complete_pass', 'passer_player_id', 
                             'passing_yards', 'pass_attempt', 'pass_touchdown', 'first_down_pass',
                             'epa', 'yards_after_catch', 'air_epa', 'yac_epa', 'air_wpa', 'yac_wpa',
-                            'interception', 'two_point_conv_points', 'sack']]
+                            'interception', 'two_point_conv_score', 'sack', 'rush_touchdown', 'rushing_yards',
+                            'rush', 'rusher_id', 'rusher_player_name', 'fumble_lost', 'fumble', 'fumbled_1_team',
+                            'fumble_recovery_1_team']].copy()
+        
+        #generate fumble to turnover stat for fpts calc
+        relevant_stats['qb_fumble_to_turnover'] = np.where(((relevant_stats['fumble'] == 1) & (relevant_stats['fumbled_1_team'].fillna('') != relevant_stats['fumble_recovery_1_team'].fillna('')) & (relevant_stats['complete_pass'] == 0) & (relevant_stats['rush'] == 0)), 1, 0)
 
-        #group by name and derive relevant metrics
-        passer_df = passing.groupby('passer_player_name', as_index=False).agg(
+        #group by name and derive relevant metrics for passing
+        passer_df = relevant_stats.groupby('passer_player_name', as_index=False).agg(
             player_id=('passer_player_id', 'first'),
-            total_yards=('yards_gained', 'sum'),
-            average_yards=('yards_gained', 'mean'),
+            total_passing_yards=('passing_yards', 'sum'),
+            average_passing_yards=('passing_yards', 'mean'),
             pass_attempts=('pass_attempt', 'sum'),
-            touchdowns=('pass_touchdown', 'sum'),
-            first_downs=('first_down_pass', 'sum'),
+            passing_touchdowns=('pass_touchdown', 'sum'),
+            first_down_passes=('first_down_pass', 'sum'),
             completions=('complete_pass', 'sum'),
             interceptions=('interception', 'sum'),
             comp_percentage=('complete_pass', 'mean'),
@@ -47,32 +52,50 @@ def main():
             yac_epa_avg=('yac_epa', 'mean'),
             air_wpa_avg=('air_wpa', 'mean'),
             yac_wpa_avg=('yac_wpa', 'mean'),
-            two_pt_passing_sum=('two_point_conv_points', 'sum'),
-            sacks=('sack', 'sum')
+            two_pt_sum=('two_point_conv_score', 'sum'),
+            sacks=('sack', 'sum'),
+            fumbles=('fumble_lost', 'sum'),
+            fumbles_to_turnovers=('qb_fumble_to_turnover', 'sum')
         )
-        #TODO: handle two point rushing fantasy points when calculating rushing stats
+
+        rusher_df = relevant_stats.groupby('rusher_player_name', as_index=False).agg(
+            player_id=('rusher_id', 'first'),
+            rushing_tds=('rush_touchdown', 'sum'),
+            rushing_yds_sum=('rushing_yards', 'sum'),
+            rushing_yds_avg=('rushing_yards', 'mean')
+        )
+
+        #merge passing and rushing stats on player_id, with only ids in the passing df being retained
+        merged = pd.merge(passer_df, rusher_df, on='player_id', how='left').fillna(0)
         
         #drop players with fewer than 10 pass attempts
-        passer_df = passer_df.query('pass_attempts > 10').reset_index(drop=True)
+        merged = merged.query('pass_attempts > 10').reset_index(drop=True)
 
         #calculate passing fantasy points
-        passer_df['fpts'] = calculate_fpts(passer_df)
+        merged['fpts'] = calculate_fpts(merged)
+        
+
+
 
 
 
 #HELPER FUNCTIONS
 
-def calculate_two_pt_passes(df):
-    df['two_point_conv_points'] = np.where((df['pass'] == 1) &
-                                        (df['two_point_conv_result'] == 'success'),
-                                        1,
-                                        0)
+def calculate_two_pt_conv(df):
+    df['two_point_conv_score'] = np.where((df['two_point_conv_result'] == 'success'), 1, 0)
+
     return(df)
 
 def calculate_fpts(df):
-    passing_fpts = (df['total_yards'] / 25) + (df['touchdowns'] * 4) - (df['interceptions'] * 2) - (df['sacks'] * 1)
+    fpts = ((df['total_passing_yards'] / 25) + (df['passing_touchdowns'] * 4) - 
+    (df['interceptions'] * 2) - (df['sacks'] * 1) + (df['two_pt_sum'] * 2))
 
-    return(passing_fpts)
+    #remove sacks from equation
+    fpts = ((df['total_passing_yards'] / 25) + (df['passing_touchdowns'] * 4) - 
+    (df['interceptions'] * 2) + (df['two_pt_sum'] * 2) - (df['fumbles_to_turnovers'] * 2) + 
+    (df['rushing_yds_sum'] / 10) + (df['rushing_tds'] * 6))
+
+    return(fpts)
 
 
 if __name__ == '__main__':
