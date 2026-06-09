@@ -5,9 +5,23 @@ pd.set_option('display.max_columns', None)
 
 def main():
     #save paths to datasets
-    datasets = ['data/play_by_play_2022.csv.gz', 'data/play_by_play_2023.csv.gz', 'data/play_by_play_2024.csv.gz',
-                'data/play_by_play_2025.csv.gz']
-    years = ['2022', '2023', '2024', '2025']
+    datasets = ['data/play_by_play_1999.csv.gz','data/play_by_play_2000.csv.gz','data/play_by_play_2001.csv.gz',
+                'data/play_by_play_2002.csv.gz','data/play_by_play_2003.csv.gz','data/play_by_play_2004.csv.gz',
+                'data/play_by_play_2005.csv.gz','data/play_by_play_2006.csv.gz','data/play_by_play_2007.csv.gz',
+                'data/play_by_play_2008.csv.gz','data/play_by_play_2009.csv.gz','data/play_by_play_2010.csv.gz',
+                'data/play_by_play_2011.csv.gz','data/play_by_play_2012.csv.gz','data/play_by_play_2013.csv.gz',
+                'data/play_by_play_2014.csv.gz','data/play_by_play_2015.csv.gz','data/play_by_play_2016.csv.gz',
+                'data/play_by_play_2017.csv.gz','data/play_by_play_2018.csv.gz','data/play_by_play_2019.csv.gz',
+                'data/play_by_play_2020.csv.gz','data/play_by_play_2021.csv.gz','data/play_by_play_2022.csv.gz', 
+                'data/play_by_play_2023.csv.gz','data/play_by_play_2024.csv.gz','data/play_by_play_2025.csv.gz']
+    years = list(range(1999,2026))
+    #years = [str(item) for item in years]
+
+    #save fpts for use later
+    df_fpts = pd.DataFrame()
+
+    #save all data to one dataframe
+    qb_historical = pd.DataFrame()
 
     #iterate through all pbp datasets to create season level summary datasets for individual player statistics
     for dataset, year in zip(datasets, years):
@@ -72,12 +86,36 @@ def main():
         #drop players with fewer than 10 pass attempts
         merged = merged.query('pass_attempts > 10').reset_index(drop=True)
 
-        #calculate passing fantasy points
-        merged['fpts'] = calculate_fpts(merged)
+        #calculate qb fantasy points
+        merged['cur_fpts'] = calculate_fpts(merged)
+        
+        #add year to dataset
+        merged['year'] = year
 
-        #save dataset
-        dataset_name = 'data/qb_' + year + '.csv'
-        merged.to_csv(dataset_name)
+        #concat yearly datasets
+        if str(year) == '1999':
+            qb_historical = merged.copy()
+        else:
+            qb_historical = pd.concat([qb_historical, merged], ignore_index=True)
+
+        #store fpts later addition to datasets
+        df_add_fpts = merged[['player_id', 'cur_fpts']]
+
+        year_name = 'fpts_' + str(year)
+        df_add_fpts.columns = ['player_id', year_name]
+
+        if str(year) == '1999':
+            df_fpts = df_add_fpts.copy()
+        else:
+            df_fpts = pd.merge(df_fpts, df_add_fpts, on='player_id', how='outer').fillna(0)
+
+
+    future_fpts = create_future_fpts(qb_historical)
+    qb_historical = add_future_fpts(qb_historical, future_fpts)
+
+    #save dataset
+    dataset_name = 'data/qb_historical.csv'
+    qb_historical.to_csv(dataset_name, index=False)
 
 
 
@@ -96,6 +134,45 @@ def calculate_fpts(df):
     (df['rushing_yds_sum'] / 10) + (df['rushing_tds'] * 6))
 
     return(fpts)
+
+def add_future_fpts(qb_historical, future_pts):
+    
+    merged = qb_historical.merge(future_pts, on=['player_id', 'year'],how='left')
+    return(merged)
+
+def create_future_fpts(qb_historical):
+
+    future_fpts = qb_historical[['player_id', 'year', 'cur_fpts']].copy()
+
+    future_fpts['year'] = future_fpts['year'] - 1
+
+    future_fpts = future_fpts.rename(columns={'cur_fpts': 'next_fpts'})
+
+    return(future_fpts)
+
+def reshape_fpts_dataset(df_fpts):
+
+    fpts_cols = [c for c in df_fpts.columns if c.startswith('fpts_')]
+
+    future_fpts = df_fpts.melt(
+        id_vars='player_id',
+        value_vars=fpts_cols,
+        var_name='fpts_year',
+        value_name='next_fpts'
+    )
+
+    future_fpts['year'] = (
+        future_fpts['fpts_year']
+        .str.replace('fpts_', '', regex=False)
+        .astype(int)
+    )
+
+    future_fpts['year'] -= 1
+
+    future_fpts = future_fpts[['player_id', 'year', 'next_fpts']]
+
+    print(future_fpts.head())
+    return(future_fpts)
 
 
 if __name__ == '__main__':
