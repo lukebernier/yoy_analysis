@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 def main():
-    df = pd.read_csv('data/qb_2022.csv')
+    df = pd.read_csv('data/qb_historical.csv')
 
     numeric = df.select_dtypes(include='number')
 
