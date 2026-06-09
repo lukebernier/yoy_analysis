@@ -41,7 +41,7 @@ def main():
                             'epa', 'yards_after_catch', 'air_epa', 'yac_epa', 'air_wpa', 'yac_wpa',
                             'interception', 'two_point_conv_score', 'sack', 'rush_touchdown', 'rushing_yards',
                             'rush', 'rusher_id', 'rusher_player_name', 'fumble_lost', 'fumble', 'fumbled_1_team',
-                            'fumble_recovery_1_team']].copy()
+                            'fumble_recovery_1_team', 'posteam']].copy()
         
         #generate fumble to turnover stat for fpts calc
         relevant_stats['qb_fumble_to_turnover'] = np.where(((relevant_stats['fumble'] == 1) & (relevant_stats['fumbled_1_team'].fillna('') != relevant_stats['fumble_recovery_1_team'].fillna('')) & (relevant_stats['complete_pass'] == 0) & (relevant_stats['rush'] == 0)), 1, 0)
@@ -49,6 +49,7 @@ def main():
         #group by name and derive relevant metrics for passing
         passer_df = relevant_stats.groupby('passer_player_name', as_index=False).agg(
             player_id=('passer_player_id', 'first'),
+            team=('posteam', 'first'),
             total_passing_yards=('passing_yards', 'sum'),
             pass_yds_per_attempt=('passing_yards', 'mean'),
             pass_attempts=('pass_attempt', 'sum'),
