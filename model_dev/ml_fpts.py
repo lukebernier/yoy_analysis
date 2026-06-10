@@ -19,10 +19,10 @@ def main():
 
     y_pred = model.predict(X_test)
 
-    mse = mean_absolute_error(y_test, y_pred)
+    mae = mean_absolute_error(y_test, y_pred)
     r2 = r2_score(y_test, y_pred)
 
-    print(f'MSE: {mse}')
+    print(f'MAE: {mae}')
     print(f'r2: {r2}')
 
 
